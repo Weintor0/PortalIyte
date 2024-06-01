@@ -57,7 +57,7 @@ def get_user(conn, user_id):
     with conn.cursor(dictionary=True) as cur:
         cur.execute("SELECT * FROM user WHERE id = %s", [user_id])
         row  = cur.fetchone()
-        response = {"id": row["id"], "email": row["email"], "phoneNumber": row["phone_number"], "username": row["username"], "bio": row["bio"], "profilePicture": row["profile_picture"], "createTime": row["create_date"], "postCount": row["post_count"], "followerCount": row["follower_count"], "followingCount": row["following_count"], "commentCount": row["comment_count"]}
+        response = {"id": row["id"], "email": row["email"], "phoneNumber": row["phone_number"], "username": row["username"], "bio": row["bio"], "profilePicture": row["profile_picture"], "createTime": row["create_date"], "postCount": row["post_count"], "followerCount": row["follower_count"], "followingCount": row["following_count"]}
         return jsonify(response), 200
 
 @user_bp.route(prefix + '/setBio', methods=["PUT"])
