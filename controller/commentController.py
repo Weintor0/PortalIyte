@@ -36,7 +36,8 @@ def post_comment(conn):
         body = request.json
         body['has_parent'] = False
         body['like_count'] = 0
-        cur.execute("INSERT INTO comment (post_id, user_id, content, has_parent, like_count) VALUES (%(postId)s, %(userId)s, %(content)s, %(has_parent)s, %(like_count)s)", body)
+        body['comment_count'] = 0
+        cur.execute("INSERT INTO comment (post_id, user_id, content, has_parent, like_count, comment_count) VALUES (%(postId)s, %(userId)s, %(content)s, %(has_parent)s, %(like_count)s, %(comment_count)s)", body)
         cur.execute("UPDATE post SET comment_count = comment_count + 1 WHERE id = %(postId)s", body)
         return "200"
     

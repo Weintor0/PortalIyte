@@ -35,7 +35,7 @@ def ensure_connection(func):
 def create_post(conn):
     with conn.cursor() as cur:
         body = request.json
-        cur.execute("INSERT INTO post (topic_id, user_id, title, content, image) VALUES (%(topicId)s, %(userId)s, %(title)s, %(content)s, %(image)s)", body)
+        cur.execute("INSERT INTO post (topic_id, user_id, title, content, image, like_count, comment_count) VALUES (%(topicId)s, %(userId)s, %(title)s, %(content)s, %(image)s,0,0)", body)
         cur.execute("UPDATE user SET post_count = post_count + 1 WHERE id = %(userId)s", body)
         return "200"
 
