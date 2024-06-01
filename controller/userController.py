@@ -6,7 +6,7 @@ from flask import request, jsonify
 import pdb
 from datetime import datetime
 import requests
-from endpoints import sql_address, backend_endpoint
+from endpoints import sql_address, backend_endpoint, frontend_endpoint
 from flask_mail import Mail, Message
 from bcrypt import hashpw, gensalt, checkpw
 import secrets
@@ -66,17 +66,18 @@ def check_password(hashed_password, user_password):
 def verify_email(conn, token):
     with conn.cursor() as cur:
         cur.execute("UPDATE user SET verified = 1 WHERE verification_token = %s", (token,))
-    image_url = "https://i.ytimg.com/vi/nooM5L1M6UM/hqdefault.jpg"
+    # image_url = "https://i.ytimg.com/vi/nooM5L1M6UM/hqdefault.jpg"
     
-    try:
-        # Fetch the image from the URL
-        response = requests.get(image_url)
-        response.raise_for_status()  # Raise an error on a bad status
-    except requests.RequestException as e:
-        return jsonify({"error": str(e)}), 404
+    # try:
+    #     # Fetch the image from the URL
+    #     response = requests.get(image_url)
+    #     response.raise_for_status()  # Raise an error on a bad status
+    # except requests.RequestException as e:
+    #     return jsonify({"error": str(e)}), 404
 
-    # Return the image file
-    return send_file(BytesIO(response.content), mimetype='image/png')
+    # # Return the image file
+    # return send_file(BytesIO(response.content), mimetype='image/png')
+    return f"You have successfully verified your email! You can now log in. <a href='{frontend_endpoint}/login'>Click here to log in</a>"
 
 @user_bp.route(prefix + '/login', methods=["POST"])
 @ensure_connection
