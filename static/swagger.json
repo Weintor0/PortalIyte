@@ -1,0 +1,469 @@
+{
+    "swagger": "2.0",
+    "info": {
+      "description": "This is the API documentation for the Access API.",
+      "version": "1.0.0",
+      "title": "Access API"
+    },
+    "host": "localhost:5002",
+    "basePath": "/api",
+    "tags": [
+      {
+        "name": "user",
+        "description": "Operations about user"
+      },
+      {
+        "name": "post",
+        "description": "Operations about posts"
+      },
+      {
+        "name": "topic",
+        "description": "Operations about topics"
+      },
+      {
+        "name": "comment",
+        "description": "Operations about comments"
+      },
+      {
+        "name": "search",
+        "description": "Search operations"
+      }
+    ],
+    "paths": {
+      "/user/register": {
+        "post": {
+          "tags": ["user"],
+          "summary": "Register a new user",
+          "description": "Registers a new user",
+          "parameters": [
+            {
+              "in": "body",
+              "name": "body",
+              "description": "User object that needs to be added",
+              "required": true,
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": { "type": "string" },
+                  "phoneNumber": { "type": "string" },
+                  "password": { "type": "string" },
+                  "username": { "type": "string" }
+                },
+                "required": ["email", "phoneNumber", "password", "username"]
+              }
+            }
+          ],
+          "responses": {
+            "200": { "description": "User registered successfully" },
+            "400": { "description": "Invalid input" }
+          }
+        }
+      },
+      "/user/login": {
+        "get": {
+          "tags": ["user"],
+          "summary": "Log in a user",
+          "description": "Logs in a user",
+          "parameters": [
+            {
+              "in": "body",
+              "name": "body",
+              "description": "User login details",
+              "required": true,
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "phoneNumber": { "type": "string" },
+                  "password": { "type": "string" }
+                },
+                "required": ["phoneNumber", "password"]
+              }
+            }
+          ],
+          "responses": {
+            "200": { "description": "Login successful" },
+            "401": { "description": "Unauthorized" }
+          }
+        }
+      },
+      "/user/{user_id}": {
+        "get": {
+          "tags": ["user"],
+          "summary": "Get user by ID",
+          "description": "Retrieves user details by ID",
+          "parameters": [
+            {
+              "name": "user_id",
+              "in": "path",
+              "required": true,
+              "type": "integer",
+              "format": "int64",
+              "description": "ID of the user to return"
+            }
+          ],
+          "responses": {
+            "200": { "description": "User details" },
+            "404": { "description": "User not found" }
+          }
+        }
+      },
+      "/user/setBio": {
+        "put": {
+          "tags": ["user"],
+          "summary": "Update user bio",
+          "description": "Updates the user's bio",
+          "parameters": [
+            {
+              "in": "body",
+              "name": "body",
+              "description": "User bio details",
+              "required": true,
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "bio": { "type": "string" },
+                  "userId": { "type": "integer", "format": "int64" }
+                },
+                "required": ["bio", "userId"]
+              }
+            }
+          ],
+          "responses": {
+            "200": { "description": "Bio updated successfully" },
+            "400": { "description": "Invalid input" }
+          }
+        }
+      },
+      "/user/setProfilePicture": {
+        "put": {
+          "tags": ["user"],
+          "summary": "Update user profile picture",
+          "description": "Updates the user's profile picture",
+          "parameters": [
+            {
+              "in": "body",
+              "name": "body",
+              "description": "User profile picture details",
+              "required": true,
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "profilePicture": { "type": "string" },
+                  "userId": { "type": "integer", "format": "int64" }
+                },
+                "required": ["profilePicture", "userId"]
+              }
+            }
+          ],
+          "responses": {
+            "200": { "description": "Profile picture updated successfully" },
+            "400": { "description": "Invalid input" }
+          }
+        }
+      },
+      "/post": {
+        "post": {
+          "tags": ["post"],
+          "summary": "Create a new post",
+          "description": "Creates a new post",
+          "parameters": [
+            {
+              "in": "body",
+              "name": "body",
+              "description": "Post object that needs to be added",
+              "required": true,
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "topicId": { "type": "integer" },
+                  "userId": { "type": "integer" },
+                  "title": { "type": "string" },
+                  "content": { "type": "string" },
+                  "image": { "type": "string" }
+                },
+                "required": ["topicId", "userId", "title", "content", "image"]
+              }
+            }
+          ],
+          "responses": {
+            "200": { "description": "Post created successfully" },
+            "400": { "description": "Invalid input" }
+          }
+        },
+        "get": {
+          "tags": ["post"],
+          "summary": "Get all posts",
+          "description": "Retrieves a list of all posts",
+          "responses": {
+            "200": { "description": "List of posts" },
+            "404": { "description": "No posts found" }
+          }
+        }
+      },
+      "/post/{post_id}": {
+        "get": {
+          "tags": ["post"],
+          "summary": "Get post by ID",
+          "description": "Retrieves details of a specific post",
+          "parameters": [
+            {
+              "name": "post_id",
+              "in": "path",
+              "required": true,
+              "type": "integer",
+              "format": "int64",
+              "description": "ID of the post to return"
+            }
+          ],
+          "responses": {
+            "200": { "description": "Post details" },
+            "404": { "description": "Post not found" }
+          }
+        }
+      },
+      "/post/like": {
+        "put": {
+          "tags": ["post"],
+          "summary": "Like a post",
+          "description": "Likes a specific post",
+          "parameters": [
+            {
+              "in": "body",
+              "name": "body",
+              "description": "Post ID to like",
+              "required": true,
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "postId": { "type": "integer" }
+                },
+                "required": ["postId"]
+              }
+            }
+          ],
+          "responses": {
+            "200": { "description": "Post liked successfully" },
+            "400": { "description": "Invalid input" }
+          }
+        }
+      },
+      "/post/unlike/{post_id}": {
+        "put": {
+          "tags": ["post"],
+          "summary": "Unlike a post",
+          "description": "Unlikes a specific post",
+          "parameters": [
+            {
+              "name": "post_id",
+              "in": "path",
+              "required": true,
+              "type": "integer",
+              "format": "int64",
+              "description": "ID of the post to unlike"
+            }
+          ],
+          "responses": {
+            "200": { "description": "Post unliked successfully" },
+            "400": { "description": "Invalid input" }
+          }
+        }
+      },
+      "/topic": {
+        "post": {
+          "tags": ["topic"],
+          "summary": "Create a new topic",
+          "description": "Creates a new topic",
+          "parameters": [
+            {
+              "in": "body",
+              "name": "body",
+              "description": "Topic object that needs to be added",
+              "required": true,
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "description": { "type": "string" },
+                  "logo": { "type": "string" }
+                },
+                "required": ["name", "description", "logo"]
+              }
+            }
+          ],
+          "responses": {
+            "200": { "description": "Topic created successfully" },
+            "400": { "description": "Invalid input" }
+          }
+        },
+        "get": {
+          "tags": ["topic"],
+          "summary": "Get all topics",
+          "description": "Retrieves a list of all topics",
+          "responses": {
+            "200": { "description": "List of topics" },
+            "404": { "description": "No topics found" }
+          }
+        }
+      },
+      "/topic/{topic_id}": {
+        "get": {
+          "tags": ["topic"],
+          "summary": "Get topic by ID",
+          "description": "Retrieves details of a specific topic",
+          "parameters": [
+            {
+              "name": "topic_id",
+              "in": "path",
+              "required": true,
+              "type": "integer",
+              "format": "int64",
+              "description": "ID of the topic to return"
+            }
+          ],
+          "responses": {
+            "200": { "description": "Topic details" },
+            "404": { "description": "Topic not found" }
+          }
+        }
+      },
+      "/comment/post": {
+        "post": {
+          "tags": ["comment"],
+          "summary": "Add a comment to a post",
+          "description": "Adds a comment to a post",
+          "parameters": [
+            {
+              "in": "body",
+              "name": "body",
+              "description": "Comment object that needs to be added",
+              "required": true,
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "postId": { "type": "integer" },
+                  "userId": { "type": "integer" },
+                  "content": { "type": "string" }
+                },
+                "required": ["postId", "userId", "content"]
+              }
+            }
+          ],
+          "responses": {
+            "200": { "description": "Comment added successfully" },
+            "400": { "description": "Invalid input" }
+          }
+        }
+      },
+      "/comment/comment": {
+        "post": {
+          "tags": ["comment"],
+          "summary": "Add a comment to another comment",
+          "description": "Adds a comment to another comment",
+          "parameters": [
+            {
+              "in": "body",
+              "name": "body",
+              "description": "Comment object that needs to be added",
+              "required": true,
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "postId": { "type": "integer" },
+                  "userId": { "type": "integer" },
+                  "content": { "type": "string" },
+                  "parentId": { "type": "integer" }
+                },
+                "required": ["postId", "userId", "content", "parentId"]
+              }
+            }
+          ],
+          "responses": {
+            "200": { "description": "Comment added successfully" },
+            "400": { "description": "Invalid input" }
+          }
+        }
+      },
+      "/comment/{post_id}": {
+        "get": {
+          "tags": ["comment"],
+          "summary": "Get comments for a post",
+          "description": "Retrieves comments for a specific post",
+          "parameters": [
+            {
+              "name": "post_id",
+              "in": "path",
+              "required": true,
+              "type": "integer",
+              "format": "int64",
+              "description": "ID of the post to get comments for"
+            }
+          ],
+          "responses": {
+            "200": { "description": "Comments" },
+            "404": { "description": "No comments found" }
+          }
+        }
+      },
+      "/search/post/{query}": {
+        "get": {
+          "tags": ["search"],
+          "summary": "Search posts",
+          "description": "Searches for posts matching the query",
+          "parameters": [
+            {
+              "name": "query",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "description": "Query string to search posts"
+            }
+          ],
+          "responses": {
+            "200": { "description": "Search results" },
+            "404": { "description": "No posts found" }
+          }
+        }
+      },
+      "/search/topic/{query}": {
+        "get": {
+          "tags": ["search"],
+          "summary": "Search topics",
+          "description": "Searches for topics matching the query",
+          "parameters": [
+            {
+              "name": "query",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "description": "Query string to search topics"
+            }
+          ],
+          "responses": {
+            "200": { "description": "Search results" },
+            "404": { "description": "No topics found" }
+          }
+        }
+      },
+      "/search/user/{query}": {
+        "get": {
+          "tags": ["search"],
+          "summary": "Search users",
+          "description": "Searches for users matching the query",
+          "parameters": [
+            {
+              "name": "query",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "description": "Query string to search users"
+            }
+          ],
+          "responses": {
+            "200": { "description": "Search results" },
+            "404": { "description": "No users found" }
+          }
+        }
+      }
+    }
+  }
+  

@@ -1,4 +1,5 @@
 Flask==3.0.3
 Flask_Cors==4.0.0
+flask_swagger_ui==4.11.1
 mysql-connector-python==8.4.0
 jellyfish==1.0.4

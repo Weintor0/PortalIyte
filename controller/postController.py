@@ -66,7 +66,7 @@ def get_post(conn, post_id):
             "comments": []
         }
         post["comments"] = get_comments(row["post_id"])
-        return jsonify(post)
+        return jsonify(post), 200
 
 @post_bp.route(prefix, methods=['GET'])
 @ensure_connection
@@ -98,20 +98,24 @@ def get_posts(conn):
             }
             post["comments"] = get_comments(row["post_id"])
             response.append(post)
-        return jsonify(response)
+        return jsonify(response), 200
 
 
 
-@post_bp.route(prefix + "/like/<post_id>", methods=['PUT'])
+@post_bp.route(prefix + "/like", methods=['PUT'])
 @ensure_connection
-def like_post(conn, post_id):
+def like_post(conn):
     with conn.cursor() as cur:
-        cur.execute("UPDATE post SET like_count = like_count + 1 WHERE id = %s", (post_id,))
+        body = request.json
+        cur.execute("UPDATE post SET like_count = like_count + 1 WHERE id = %(postId)s", body)
+        cur.execute("INSERT INTO liked (post_id, user_id) VALUES (%(postId)s, %(userId)s)", body)
         return "200"
     
-@post_bp.route(prefix + "/unlike/<post_id>", methods=['PUT'])
+@post_bp.route(prefix + "/unlike", methods=['PUT'])
 @ensure_connection
-def unlike_post(conn, post_id):
+def unlike_post(conn):
     with conn.cursor() as cur:
-        cur.execute("UPDATE post SET like_count = like_count - 1 WHERE id = %s", (post_id,))
+        body = request.json
+        cur.execute("UPDATE post SET like_count = like_count - 1 WHERE id = %(postId)s", body)
+        cur.execute("DELETE FROM liked WHERE post_id = %(postId)s AND user_id = %(userId)s", body)
         return "200"

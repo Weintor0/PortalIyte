@@ -20,6 +20,8 @@ conn = mysql.connector.connect(
     ssl_disabled=True  # Disable SSL
 )
 
+similarity_threshold = 0.7
+
 def ensure_connection(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -30,6 +32,30 @@ def ensure_connection(func):
         return func(conn, *args, **kwargs)
     return wrapper
 
+@search_bp.route(prefix + '/post/<query>', methods=['GET'])
+@ensure_connection
+def search_post(conn, query):
+    with conn.cursor(dictionary=True) as cur:
+        cur.execute("SELECT * FROM post")
+        rows = cur.fetchall()
+        response = []
+        for row in rows:
+            if(jellyfish.jaro_similarity(row["title"], query) > similarity_threshold):
+                response.append({"id": row["id"], "userId": row["user_id"], "title": row["title"], "content": row["content"], "image": row["image"], "likeCount": row["like_count"], "commentCount": row["comment_count"], "createDate": row["create_date"]})
+            return jsonify(response)
+
+@search_bp.route(prefix + '/topic/<query>', methods=['GET'])
+@ensure_connection
+def search_topic(conn, query):
+    with conn.cursor(dictionary=True) as cur:
+        cur.execute("SELECT * FROM topic")
+        rows = cur.fetchall()
+        response = []
+        for row in rows:
+            if(jellyfish.jaro_similarity(row["name"], query) > similarity_threshold):
+                response.append({"id": row["id"], "name": row["name"], "description": row["description"], "logo": row["logo"]})
+            return jsonify(response)
+
 @search_bp.route(prefix + '/user/<query>', methods=['GET'])
 @ensure_connection
 def search_user(conn, query):
@@ -38,6 +64,6 @@ def search_user(conn, query):
         rows = cur.fetchall()
         response = []
         for row in rows:
-            if(jellyfish.jaro_similarity(row["username"], query) > 0.8):
-                response.append({"id": row["id"], "email": row["email"], "phoneNumber": row["phone_number"], "username": row["username"], "bio": row["bio"], "profilePicture": row["profile_picture"], "createTime": row["create_date"], "postCount": row["post_count"], "followerCount": row["follower_count"], "followingCount": row["following_count"], "commentCount": row["comment_count"]})
+            if(jellyfish.jaro_similarity(row["username"], query) > similarity_threshold):
+                response.append({"id": row["id"], "email": row["email"], "phoneNumber": row["phone_number"], "username": row["username"], "bio": row["bio"], "profilePicture": row["profile_picture"], "createTime": row["create_date"], "postCount": row["post_count"], "followerCount": row["follower_count"], "followingCount": row["following_count"]})
             return jsonify(response)
