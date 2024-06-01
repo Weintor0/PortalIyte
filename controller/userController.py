@@ -66,7 +66,7 @@ def login(conn):
     with conn.cursor() as cur:
         body = request.json
         cur.execute("SELECT * FROM user WHERE phone_number = %(phoneNumber)s", body)
-        rows = cur.fetchone()
+        rows = cur.fetchall()
         for row in rows:
             if(row[2] == body['phoneNumber'] and check_password(row[3], body['password'])):
                 return "200"
