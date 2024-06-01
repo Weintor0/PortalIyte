@@ -38,7 +38,36 @@ def create_post(conn):
         cur.execute("INSERT INTO post (topic_id, user_id, title, content, image) VALUES (%(topicId)s, %(userId)s, %(title)s, %(content)s, %(image)s)", body)
         cur.execute("UPDATE user SET post_count = post_count + 1 WHERE id = %(userId)s", body)
         return "200"
-    
+
+@post_bp.route(prefix + "/<post_id>", methods=['GET'])
+@ensure_connection
+def get_post(conn, post_id):
+    with conn.cursor(dictionary=True) as cur:
+        cur.execute("SELECT * FROM post_details WHERE post_id = %s", (post_id,))
+        row = cur.fetchone()
+        post = {
+            "postId": row["post_id"],
+            "title": row["post_title"],
+            "content": row["post_content"],
+            "image": row["post_image"],
+            "likeCount": row["post_like_count"],
+            "commentCount": row["post_comment_count"],
+            "createDate": row["post_create_date"],
+            "user": {
+                "userId": row["user_id"],
+                "username": row["user_username"],
+                "profilePicture": row["user_profile_picture"]
+            },
+            "topic": {
+                "topicId": row["topic_id"],
+                "name": row["topic_name"],
+                "logo": row["topic_logo"]
+            },
+            "comments": []
+        }
+        post["comments"] = get_comments(row["post_id"])
+        return jsonify(post)
+
 @post_bp.route(prefix, methods=['GET'])
 @ensure_connection
 def get_posts(conn):
@@ -53,6 +82,7 @@ def get_posts(conn):
                 "content": row["post_content"],
                 "image": row["post_image"],
                 "likeCount": row["post_like_count"],
+                "commentCount": row["post_comment_count"],
                 "createDate": row["post_create_date"],
                 "user": {
                     "userId": row["user_id"],
@@ -69,3 +99,19 @@ def get_posts(conn):
             post["comments"] = get_comments(row["post_id"])
             response.append(post)
         return jsonify(response)
+
+
+
+@post_bp.route(prefix + "/like/<post_id>", methods=['PUT'])
+@ensure_connection
+def like_post(conn, post_id):
+    with conn.cursor() as cur:
+        cur.execute("UPDATE post SET like_count = like_count + 1 WHERE id = %s", (post_id,))
+        return "200"
+    
+@post_bp.route(prefix + "/unlike/<post_id>", methods=['PUT'])
+@ensure_connection
+def unlike_post(conn, post_id):
+    with conn.cursor() as cur:
+        cur.execute("UPDATE post SET like_count = like_count - 1 WHERE id = %s", (post_id,))
+        return "200"

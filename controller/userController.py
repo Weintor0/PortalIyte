@@ -48,7 +48,8 @@ def register(conn):
     with conn.cursor() as cur:
         body = request.json
         cur.execute("INSERT INTO user (email, phone_number, password, username, follower_count, following_count, post_count) VALUES (%(email)s, %(phoneNumber)s, %(password)s, %(username)s,0,0,0)", body)
-        return "200"
+        user_id = cur.lastrowid
+        return jsonify({"id": user_id}), 200
 
 @user_bp.route(prefix + '/<user_id>', methods=["GET"])
 @ensure_connection

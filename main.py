@@ -3,6 +3,7 @@ from controller.userController import user_bp
 from controller.postController import post_bp
 from controller.topicController import topic_bp
 from controller.commentController import comment_bp
+from controller.searchController import search_bp
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -12,6 +13,7 @@ app.register_blueprint(user_bp)
 app.register_blueprint(post_bp)
 app.register_blueprint(topic_bp)
 app.register_blueprint(comment_bp)
+app.register_blueprint(search_bp)
 
 @app.before_request
 def init_threads():

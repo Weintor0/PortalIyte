@@ -37,6 +37,7 @@ def post_comment(conn):
         body['has_parent'] = False
         body['like_count'] = 0
         cur.execute("INSERT INTO comment (post_id, user_id, content, has_parent, like_count) VALUES (%(postId)s, %(userId)s, %(content)s, %(has_parent)s, %(like_count)s)", body)
+        cur.execute("UPDATE post SET comment_count = comment_count + 1 WHERE id = %(postId)s", body)
         return "200"
     
 @comment_bp.route(prefix + '/comment', methods=['POST'])
