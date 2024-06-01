@@ -1,7 +1,7 @@
 from functools import wraps
 import mysql.connector
 from flask import Blueprint
-from flask import request, jsonify,send_file
+from flask import request, jsonify
 import pdb
 from datetime import datetime
 
@@ -11,7 +11,7 @@ prefix = "/user"
 
 # Connect to the MySQL database
 conn = mysql.connector.connect(
-    host='127.0.0.1',
+    host='35.194.62.103',
     user='portal',
     password='portal',
     database='portal_base',
@@ -54,21 +54,24 @@ def register(conn):
 def get_user(conn, user_id):
     with conn.cursor() as cur:
         cur.execute("SELECT * FROM user WHERE id = %s", [user_id])
-        return cur.fetchone()
+        row  = cur.fetchone()
+        response = {"id": row[0], "email": row[1], "phoneNumber": row[2], "username": row[4], "bio": row[5], "profilePicture": row[6], "createTime": row[7]}
+        return jsonify(response), 200
 
-@user_bp.route(prefix, methods=["PUT"])
+@user_bp.route(prefix + '/setBio', methods=["PUT"])
 @ensure_connection
 def set_bio(conn):
     with conn.cursor() as cur:
         body = request.json
-        cur.execute("UPDATE user SET bio = %(bio)s WHERE id = %(user_id)s", body)
+        cur.execute("UPDATE user SET bio = %(bio)s WHERE id = %(userId)s", body)
         return "200"
     
-@user_bp.route(prefix + '/<user_id>/profile_picture', methods=["PUT"])
+@user_bp.route(prefix + '/setProfilePicture', methods=["PUT"])
 @ensure_connection
-def set_profile_picture(conn, user_id, profile_picture):
+def set_profile_picture(conn):
     with conn.cursor() as cur:
-        cur.execute("UPDATE user SET profile_picture = %s WHERE id = %s", [profile_picture, user_id])
+        body = request.json
+        cur.execute("UPDATE user SET profile_picture = %(profilePicture)s WHERE id = %(userId)s", body)
         return "200"
 
 """"
@@ -251,7 +254,7 @@ def get_all_docks(conn):
 def add_odm_task(job_id, output_path, status):
     with conn.cursor() as cur:
         cur.execute("SELECT * FROM odm_tasks WHERE job_id = %s", [job_id])
-        existing_task = cur.fetchone()
+        existing_task = row
         
         if existing_task:
             # If a record with the given job_id exists, update its status
