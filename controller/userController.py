@@ -69,7 +69,7 @@ def login(conn):
         rows = cur.fetchall()
         for row in rows:
             if(row[2] == body['phoneNumber'] and check_password(row[3], body['password'])):
-                return "200"
+                return jsonify({"id": row[0]}), 200
         return "401"
     
 @user_bp.route(prefix + '/register', methods=["POST"])
