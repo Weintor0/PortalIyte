@@ -5,7 +5,9 @@ from flask import request, jsonify
 import pdb
 from datetime import datetime
 from sql_address import sql_address
-
+from flask_mail import Mail, Message
+from bcrypt import hashpw, gensalt, checkpw
+import secrets
 
 user_bp = Blueprint('user', __name__, url_prefix="/api")
 prefix = "/user"
@@ -30,7 +32,35 @@ def ensure_connection(func):
         return func(conn, *args, **kwargs)
     return wrapper
 
-@user_bp.route(prefix + '/login', methods=["GET"])
+mail = Mail()
+
+def configure(app):
+    app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+    app.config['MAIL_PORT'] = 587
+    app.config['MAIL_USERNAME'] = 'portaliyte@gmail.com'
+    app.config['MAIL_PASSWORD'] = 'jztu faux imoo ufhb'
+    app.config['MAIL_USE_TLS'] = True
+    app.config['MAIL_USE_SSL'] = False
+    app.config['MAIL_DEFAULT_SENDER'] = 'portaliyte@gmail.com'
+    mail.init_app(app)
+
+def hash_password(password):
+    return hashpw(password.encode('utf-8'), gensalt())
+
+def generate_token():
+    return secrets.token_urlsafe(16)
+
+def send_auth_email(email, verification_token):
+    msg = Message('Verify Your Email', recipients=[email])
+    msg.body = f"Click the link to verify your email: http://localhost:5002/verifyEmail?token={verification_token}"
+    mail.send(msg)
+
+def check_password(hashed_password, user_password):
+    return checkpw(user_password.encode('utf-8'), hashed_password.encode('utf-8'))
+
+
+
+@user_bp.route(prefix + '/login', methods=["POST"])
 @ensure_connection
 def login(conn):
     with conn.cursor() as cur:
@@ -38,7 +68,7 @@ def login(conn):
         cur.execute("SELECT * FROM user")
         rows = cur.fetchall()
         for row in rows:
-            if(row[2] == body['phoneNumber'] and row[3] == body['password']):
+            if(row[2] == body['phoneNumber'] and check_password(row[3], body['password'])):
                 return "200"
         return "401"
     
@@ -47,6 +77,9 @@ def login(conn):
 def register(conn):
     with conn.cursor() as cur:
         body = request.json
+        token = generate_token()
+        send_auth_email(body['email'], token)
+        body['password'] = hash_password(body['password']).decode('utf-8')
         cur.execute("INSERT INTO user (email, phone_number, password, username, follower_count, following_count, post_count) VALUES (%(email)s, %(phoneNumber)s, %(password)s, %(username)s,0,0,0)", body)
         user_id = cur.lastrowid
         return jsonify({"id": user_id}), 200
