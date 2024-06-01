@@ -45,7 +45,7 @@ def configure(app):
     mail.init_app(app)
 
 def hash_password(password):
-    return hashpw(password.encode('utf-8'), gensalt())
+    return hashpw(password.encode('utf-8'), gensalt()).decode('utf-8')
 
 def generate_token():
     return secrets.token_urlsafe(16)
@@ -65,8 +65,8 @@ def check_password(hashed_password, user_password):
 def login(conn):
     with conn.cursor() as cur:
         body = request.json
-        cur.execute("SELECT * FROM user")
-        rows = cur.fetchall()
+        cur.execute("SELECT * FROM user WHERE phone_number = %(phoneNumber)s", body)
+        rows = cur.fetchone()
         for row in rows:
             if(row[2] == body['phoneNumber'] and check_password(row[3], body['password'])):
                 return "200"
@@ -79,7 +79,7 @@ def register(conn):
         body = request.json
         token = generate_token()
         send_auth_email(body['email'], token)
-        body['password'] = hash_password(body['password']).decode('utf-8')
+        body['password'] = hash_password(body['password'])
         cur.execute("INSERT INTO user (email, phone_number, password, username, follower_count, following_count, post_count) VALUES (%(email)s, %(phoneNumber)s, %(password)s, %(username)s,0,0,0)", body)
         user_id = cur.lastrowid
         return jsonify({"id": user_id}), 200
