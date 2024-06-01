@@ -4,7 +4,7 @@ from flask import Blueprint
 from flask import request, jsonify
 import pdb
 from datetime import datetime
-from sql_address import sql_address
+from endpoints import sql_address, backend_endpoint
 from flask_mail import Mail, Message
 from bcrypt import hashpw, gensalt, checkpw
 import secrets
@@ -52,24 +52,29 @@ def generate_token():
 
 def send_auth_email(email, verification_token):
     msg = Message('Verify Your Email', recipients=[email])
-    msg.body = f"Click the link to verify your email: http://localhost:5002/verifyEmail?token={verification_token}"
+    msg.body = f"Click the link to verify your email: {backend_endpoint}/api/user/verifyEmail/{verification_token}"
     mail.send(msg)
 
 def check_password(hashed_password, user_password):
     return checkpw(user_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
 
+@user_bp.route(prefix + '/verifyEmail/<token>', methods=["GET"])
+@ensure_connection
+def verify_email(conn, token):
+    with conn.cursor() as cur:
+        cur.execute("UPDATE user SET verified = 1 WHERE verification_token = %s", (token,))
+        return "200"
 
 @user_bp.route(prefix + '/login', methods=["POST"])
 @ensure_connection
 def login(conn):
-    with conn.cursor() as cur:
+    with conn.cursor(dictionary=True) as cur:
         body = request.json
         cur.execute("SELECT * FROM user WHERE phone_number = %(phoneNumber)s", body)
-        rows = cur.fetchall()
-        for row in rows:
-            if(row[2] == body['phoneNumber'] and check_password(row[3], body['password'])):
-                return jsonify({"id": row[0]}), 200
+        row = cur.fetchone()
+        if(row["verified"] and row["phone_number"] == body['phoneNumber'] and check_password(row["password"], body['password'])):
+            return jsonify({"id": row["id"]}), 200
         return "401"
     
 @user_bp.route(prefix + '/register', methods=["POST"])
@@ -80,7 +85,8 @@ def register(conn):
         token = generate_token()
         send_auth_email(body['email'], token)
         body['password'] = hash_password(body['password'])
-        cur.execute("INSERT INTO user (email, phone_number, password, username, follower_count, following_count, post_count) VALUES (%(email)s, %(phoneNumber)s, %(password)s, %(username)s,0,0,0)", body)
+        body['verificationToken'] = token
+        cur.execute("INSERT INTO user (email, phone_number, password, username, follower_count, following_count, post_count, verification_token) VALUES (%(email)s, %(phoneNumber)s, %(password)s, %(username)s,0,0,0,%(verificationToken)s)", body)
         user_id = cur.lastrowid
         return jsonify({"id": user_id}), 200
 

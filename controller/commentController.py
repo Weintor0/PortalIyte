@@ -4,7 +4,7 @@ from flask import Blueprint
 from flask import request, jsonify
 import pdb
 from datetime import datetime
-from sql_address import sql_address
+from endpoints import sql_address
 
 comment_bp = Blueprint('comment', __name__, url_prefix="/api")
 prefix = "/comment"

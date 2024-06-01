@@ -5,7 +5,7 @@ from flask import request, jsonify
 import pdb
 from datetime import datetime
 from controller.commentController import get_comments
-from sql_address import sql_address
+from endpoints import sql_address
 
 post_bp = Blueprint('post', __name__, url_prefix="/api")
 prefix = "/post"
