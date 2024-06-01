@@ -101,6 +101,39 @@ def get_posts(conn):
         return jsonify(response), 200
 
 
+@post_bp.route(prefix + "/topic/<topic_id>", methods=['GET'])
+@ensure_connection
+def get_posts_by_topic(conn, topic_id):
+    with conn.cursor(dictionary=True) as cur:
+        cur.execute("SELECT * FROM post_details WHERE topic_id = %s", (topic_id,))
+        rows = cur.fetchall()
+        response = []
+        for row in rows:
+            post = {
+                "postId": row["post_id"],
+                "title": row["post_title"],
+                "content": row["post_content"],
+                "image": row["post_image"],
+                "likeCount": row["post_like_count"],
+                "commentCount": row["post_comment_count"],
+                "createDate": row["post_create_date"],
+                "user": {
+                    "userId": row["user_id"],
+                    "username": row["user_username"],
+                    "profilePicture": row["user_profile_picture"]
+                },
+                "topic": {
+                    "topicId": row["topic_id"],
+                    "name": row["topic_name"],
+                    "logo": row["topic_logo"]
+                },
+                "comments": []
+            }
+            post["comments"] = get_comments(row["post_id"])
+            response.append(post)
+        return jsonify(response), 200
+
+
 
 @post_bp.route(prefix + "/like", methods=['PUT'])
 @ensure_connection

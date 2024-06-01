@@ -1,9 +1,11 @@
 from functools import wraps
+from io import BytesIO
 import mysql.connector
-from flask import Blueprint
+from flask import Blueprint, send_file
 from flask import request, jsonify
 import pdb
 from datetime import datetime
+import requests
 from endpoints import sql_address, backend_endpoint
 from flask_mail import Mail, Message
 from bcrypt import hashpw, gensalt, checkpw
@@ -64,7 +66,17 @@ def check_password(hashed_password, user_password):
 def verify_email(conn, token):
     with conn.cursor() as cur:
         cur.execute("UPDATE user SET verified = 1 WHERE verification_token = %s", (token,))
-        return "200"
+    image_url = "https://i.ytimg.com/vi/nooM5L1M6UM/hqdefault.jpg"
+    
+    try:
+        # Fetch the image from the URL
+        response = requests.get(image_url)
+        response.raise_for_status()  # Raise an error on a bad status
+    except requests.RequestException as e:
+        return jsonify({"error": str(e)}), 404
+
+    # Return the image file
+    return send_file(BytesIO(response.content), mimetype='image/png')
 
 @user_bp.route(prefix + '/login', methods=["POST"])
 @ensure_connection
@@ -114,3 +126,88 @@ def set_profile_picture(conn):
         body = request.json
         cur.execute("UPDATE user SET profile_picture = %(profilePicture)s WHERE id = %(userId)s", body)
         return "200"
+
+@user_bp.route(prefix + '/follow', methods=["POST"])
+@ensure_connection
+def follow(conn):
+    with conn.cursor() as cur:
+        body = request.json
+        cur.execute("INSERT INTO follow (follower_id, following_id) VALUES (%(followerId)s, %(followingId)s)", body)
+        cur.execute("UPDATE user SET follower_count = follower_count + 1 WHERE id = %(followingId)s", body)
+        cur.execute("UPDATE user SET following_count = following_count + 1 WHERE id = %(followerId)s", body)
+        return "200"
+
+@user_bp.route(prefix + '/unfollow', methods=["POST"])
+@ensure_connection
+def unfollow(conn):
+    with conn.cursor() as cur:
+        body = request.json
+        cur.execute("DELETE FROM follow WHERE follower_id = %(followerId)s AND following_id = %(followingId)s", body)
+        cur.execute("UPDATE user SET follower_count = follower_count - 1 WHERE id = %(followingId)s", body)
+        cur.execute("UPDATE user SET following_count = following_count - 1 WHERE id = %(followerId)s", body)
+        return "200"
+
+@user_bp.route(prefix + '/followers/<user_id>', methods=["GET"])
+@ensure_connection
+def get_followers(conn, user_id):
+    with conn.cursor(dictionary=True) as cur:
+        cur.execute("SELECT * FROM follow WHERE following_id = %s", [user_id])
+        rows = cur.fetchall()
+        response = []
+        for row in rows:
+            cur.execute("SELECT * FROM user WHERE id = %s", [row["follower_id"]])
+            user = cur.fetchone()
+            response.append({"id": user["id"], "email": user["email"], "phoneNumber": user["phone_number"], "username": user["username"], "bio": user["bio"], "profilePicture": user["profile_picture"], "createTime": user["create_date"], "postCount": user["post_count"], "followerCount": user["follower_count"], "followingCount": user["following_count"]})
+        return jsonify(response), 200
+    
+@user_bp.route(prefix + '/following/<user_id>', methods=["GET"])
+@ensure_connection
+def get_following(conn, user_id):
+    with conn.cursor(dictionary=True) as cur:
+        cur.execute("SELECT * FROM follow WHERE follower_id = %s", [user_id])
+        rows = cur.fetchall()
+        response = []
+        for row in rows:
+            cur.execute("SELECT * FROM user WHERE id = %s", [row["following_id"]])
+            user = cur.fetchone()
+            response.append({"id": user["id"], "email": user["email"], "phoneNumber": user["phone_number"], "username": user["username"], "bio": user["bio"], "profilePicture": user["profile_picture"], "createTime": user["create_date"], "postCount": user["post_count"], "followerCount": user["follower_count"], "followingCount": user["following_count"]})
+        return jsonify(response), 200
+    
+@user_bp.route(prefix + '/likedPosts/<user_id>', methods=["GET"])
+@ensure_connection
+def get_liked_posts(conn, user_id):
+    with conn.cursor(dictionary=True) as cur:
+        cur.execute("SELECT * FROM liked WHERE user_id = %s", [user_id])
+        rows = cur.fetchall()
+        response = []
+        for row in rows:
+            cur.execute("SELECT * FROM post WHERE id = %s", [row["post_id"]])
+            post = cur.fetchone()
+            response.append({"postId": post["id"], "title": post["title"], "content": post["content"], "image": post["image"], "likeCount": post["like_count"], "commentCount": post["comment_count"], "createDate": post["create_date"]})
+        return jsonify(response), 200
+
+@user_bp.route(prefix + '/comments/<user_id>', methods=["GET"])
+@ensure_connection
+def get_comments(conn, user_id):
+    with conn.cursor(dictionary=True) as cur:
+        cur.execute("SELECT * FROM comment WHERE user_id = %s", [user_id])
+        comments = cur.fetchall()
+        comment_tree = []
+
+        # Create a dictionary to map comment IDs to their corresponding comments
+        comment_dict = {comment["id"]: comment for comment in comments}
+
+        for comment in comments:
+            if not comment["has_parent"]:
+                # If comment doesn't have a parent, it's a root comment
+                comment_tree.append(comment)
+            else:
+                # If comment has a parent, add it to its parent's 'replies' list
+                parent_id = comment["parent_id"]
+                parent_comment = comment_dict[parent_id]
+                if "replies" not in parent_comment:
+                    parent_comment["replies"] = []
+                parent_comment["replies"].append(comment)
+
+        return jsonify(comment_tree), 200
+    
