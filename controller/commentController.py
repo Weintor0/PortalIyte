@@ -4,14 +4,14 @@ from flask import Blueprint
 from flask import request, jsonify
 import pdb
 from datetime import datetime
-
+from sql_address import sql_address
 
 comment_bp = Blueprint('comment', __name__, url_prefix="/api")
 prefix = "/comment"
 
 # Connect to the MySQL database
 conn = mysql.connector.connect(
-    host='35.194.62.103',
+    host=sql_address,
     user='portal',
     password='portal',
     database='portal_base',

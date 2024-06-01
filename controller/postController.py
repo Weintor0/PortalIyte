@@ -5,14 +5,14 @@ from flask import request, jsonify
 import pdb
 from datetime import datetime
 from controller.commentController import get_comments
-
+from sql_address import sql_address
 
 post_bp = Blueprint('post', __name__, url_prefix="/api")
 prefix = "/post"
 
 # Connect to the MySQL database
 conn = mysql.connector.connect(
-    host='35.194.62.103',
+    host=sql_address,
     user='portal',
     password='portal',
     database='portal_base',
@@ -36,6 +36,7 @@ def create_post(conn):
     with conn.cursor() as cur:
         body = request.json
         cur.execute("INSERT INTO post (topic_id, user_id, title, content, image) VALUES (%(topicId)s, %(userId)s, %(title)s, %(content)s, %(image)s)", body)
+        cur.execute("UPDATE user SET post_count = post_count + 1 WHERE id = %(userId)s", body)
         return "200"
     
 @post_bp.route(prefix, methods=['GET'])
