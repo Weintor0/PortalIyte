@@ -1,17 +1,22 @@
 from functools import wraps
+from io import BytesIO
 import mysql.connector
-from flask import Blueprint
+from flask import Blueprint, send_file
 from flask import request, jsonify
 import pdb
 from datetime import datetime
-
+import requests
+from endpoints import sql_address, backend_endpoint, frontend_endpoint
+from flask_mail import Mail, Message
+from bcrypt import hashpw, gensalt, checkpw
+import secrets
 
 user_bp = Blueprint('user', __name__, url_prefix="/api")
 prefix = "/user"
 
 # Connect to the MySQL database
 conn = mysql.connector.connect(
-    host='35.194.62.103',
+    host=sql_address,
     user='portal',
     password='portal',
     database='portal_base',
@@ -29,33 +34,89 @@ def ensure_connection(func):
         return func(conn, *args, **kwargs)
     return wrapper
 
-@user_bp.route(prefix + '/login', methods=["GET"])
+mail = Mail()
+
+def configure(app):
+    app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+    app.config['MAIL_PORT'] = 587
+    app.config['MAIL_USERNAME'] = 'portaliyte@gmail.com'
+    app.config['MAIL_PASSWORD'] = 'jztu faux imoo ufhb'
+    app.config['MAIL_USE_TLS'] = True
+    app.config['MAIL_USE_SSL'] = False
+    app.config['MAIL_DEFAULT_SENDER'] = 'portaliyte@gmail.com'
+    mail.init_app(app)
+
+def hash_password(password):
+    return hashpw(password.encode('utf-8'), gensalt()).decode('utf-8')
+
+def generate_token():
+    return secrets.token_urlsafe(16)
+
+def send_auth_email(email, verification_token):
+    msg = Message('Verify Your Email', recipients=[email])
+    msg.body = f"Click the link to verify your email: {backend_endpoint}/api/user/verifyEmail/{verification_token}"
+    mail.send(msg)
+
+def check_password(hashed_password, user_password):
+    return checkpw(user_password.encode('utf-8'), hashed_password.encode('utf-8'))
+
+
+@user_bp.route(prefix + '/verifyEmail/<token>', methods=["GET"])
+@ensure_connection
+def verify_email(conn, token):
+    with conn.cursor() as cur:
+        cur.execute("UPDATE user SET verified = 1 WHERE verification_token = %s", (token,))
+    # image_url = "https://i.ytimg.com/vi/nooM5L1M6UM/hqdefault.jpg"
+    
+    # try:
+    #     # Fetch the image from the URL
+    #     response = requests.get(image_url)
+    #     response.raise_for_status()  # Raise an error on a bad status
+    # except requests.RequestException as e:
+    #     return jsonify({"error": str(e)}), 404
+
+    # # Return the image file
+    # return send_file(BytesIO(response.content), mimetype='image/png')
+    return f"You have successfully verified your email! You can now log in."
+
+@user_bp.route(prefix + '/login', methods=["POST"])
 @ensure_connection
 def login(conn):
-    with conn.cursor() as cur:
+    with conn.cursor(dictionary=True) as cur:
         body = request.json
-        cur.execute("SELECT * FROM user")
-        rows = cur.fetchall()
-        for row in rows:
-            if(row[2] == body['phoneNumber'] and row[3] == body['password']):
-                return "200"
-        return "401"
+        cur.execute("SELECT * FROM user WHERE phone_number = %(phoneNumber)s", body)
+        row = cur.fetchone()
+        if(row):
+            if(row["phone_number"] == body['phoneNumber'] and check_password(row["password"], body['password'])):
+                if(row["verified"]):
+                    return jsonify({"id": row["id"]}), 200
+                else:
+                    return "User is not verified. Please verify your email.", 401
+            else:
+                return "Phone number or password is incorrect.", 401
+        else:
+            return "User does not exist.", 404
     
 @user_bp.route(prefix + '/register', methods=["POST"])
 @ensure_connection
 def register(conn):
     with conn.cursor() as cur:
         body = request.json
-        cur.execute("INSERT INTO user (email, phone_number, password, username) VALUES (%(email)s, %(phoneNumber)s, %(password)s, %(username)s)", body)
-        return "200"
+        token = generate_token()
+        send_auth_email(body['email'], token)
+        body['password'] = hash_password(body['password'])
+        body['verificationToken'] = token
+        cur.execute("INSERT INTO user (email, phone_number, password, username, follower_count, following_count, post_count, verification_token) VALUES (%(email)s, %(phoneNumber)s, %(password)s, %(username)s,0,0,0,%(verificationToken)s)", body)
+        user_id = cur.lastrowid
+        return jsonify({"id": user_id}), 200
 
 @user_bp.route(prefix + '/<user_id>', methods=["GET"])
 @ensure_connection
 def get_user(conn, user_id):
-    with conn.cursor() as cur:
+    with conn.cursor(dictionary=True) as cur:
         cur.execute("SELECT * FROM user WHERE id = %s", [user_id])
         row  = cur.fetchone()
-        response = {"id": row[0], "email": row[1], "phoneNumber": row[2], "username": row[4], "bio": row[5], "profilePicture": row[6], "createTime": row[7]}
+        response = {"id": row["id"], "email": row["email"], "phoneNumber": row["phone_number"], "username": row["username"], "bio": row["bio"], "profilePicture": row["profile_picture"], "createTime": row["create_date"], "postCount": row["post_count"], "followerCount": row["follower_count"], "followingCount": row["following_count"]}
         return jsonify(response), 200
 
 @user_bp.route(prefix + '/setBio', methods=["PUT"])
@@ -74,235 +135,87 @@ def set_profile_picture(conn):
         cur.execute("UPDATE user SET profile_picture = %(profilePicture)s WHERE id = %(userId)s", body)
         return "200"
 
-""""
-@sql_bp.route(prefix + '/getWaylineFiles')
+@user_bp.route(prefix + '/follow', methods=["POST"])
 @ensure_connection
-def get_wayline_files(conn):
+def follow(conn):
     with conn.cursor() as cur:
-        cur.execute("SELECT * FROM wayline_file")
+        body = request.json
+        cur.execute("INSERT INTO follow (follower_id, following_id) VALUES (%(followerId)s, %(followingId)s)", body)
+        cur.execute("UPDATE user SET follower_count = follower_count + 1 WHERE id = %(followingId)s", body)
+        cur.execute("UPDATE user SET following_count = following_count + 1 WHERE id = %(followerId)s", body)
+        return "200"
+
+@user_bp.route(prefix + '/unfollow', methods=["POST"])
+@ensure_connection
+def unfollow(conn):
+    with conn.cursor() as cur:
+        body = request.json
+        cur.execute("DELETE FROM follow WHERE follower_id = %(followerId)s AND following_id = %(followingId)s", body)
+        cur.execute("UPDATE user SET follower_count = follower_count - 1 WHERE id = %(followingId)s", body)
+        cur.execute("UPDATE user SET following_count = following_count - 1 WHERE id = %(followerId)s", body)
+        return "200"
+
+@user_bp.route(prefix + '/followers/<user_id>', methods=["GET"])
+@ensure_connection
+def get_followers(conn, user_id):
+    with conn.cursor(dictionary=True) as cur:
+        cur.execute("SELECT * FROM follow WHERE following_id = %s", [user_id])
         rows = cur.fetchall()
-        records = []
-        column_names = [desc[0] for desc in cur.description]  # Get column names
+        response = []
         for row in rows:
-            record_dict = {}
-            for i in range(len(column_names)):
-                if column_names[i] in ['id', 'name', "create_time", "update_time", "wayline_id", "template_types"]:
-                    if column_names[i] in ["create_time", "update_time"]:
-                        seconds_since_epoch = row[i] / 1000
-                        dt = datetime.fromtimestamp(seconds_since_epoch)
-                        formatted_datetime = dt.strftime('%d-%m-%Y %H:%M')
-                        print(formatted_datetime)
-                        record_dict[column_names[i]] = formatted_datetime
-                    else:
-                        record_dict[column_names[i]] = row[i]
-            records.append(record_dict)
-    return jsonify({'waylinefiles': records}), 200
-
-@sql_bp.route(prefix + '/deleteWaylineFile/<wayline_file_id>', methods=["DELETE"])
-@ensure_connection
-def delete_wayline_file(conn,wayline_file_id):
-    with conn.cursor() as cur:
-        cur.execute("DELETE FROM wayline_file WHERE id = %s", [wayline_file_id])
-    return "200"
-
-@sql_bp.route(prefix + '/saveAIJob', methods=["POST"])
-@ensure_connection
-def save_ai_jobs(conn):
-    data = request.json
-    with conn.cursor() as cur:
-        cur.execute("INSERT INTO AI_jobs (job_name, job_description, status, process, wayline_job_id, AI_model_id, user_id) VALUES (%(job_name)s, %(job_description)s, 'ongoing', '0% - in progress', %(wayline_job_id)s, %(AI_model_id)s, 1)", data)
-    return "200"
-
-@sql_bp.route(prefix + '/getJobIDFromAIJobID/<ai_job_id>')
-@ensure_connection
-def get_job_id_from_ai_job_id(conn,ai_job_id):
-    with conn.cursor() as cur:
-        cur.execute("SELECT wayline_job_id FROM AI_jobs WHERE AI_jobs.id = %s", [ai_job_id])
-        rows = cur.fetchall()
-        response = rows[0][0]
-    return jsonify({'job_id': response}),200
-
-@sql_bp.route(prefix + '/getAIJobs', methods=["GET"])
-@ensure_connection
-def get_ai_jobs(conn):
-    with conn.cursor() as cur:
-        cur.execute("SELECT AI_jobs.id, AI_model.model_name, wayline_job.name, AI_jobs.process, AI_jobs.status FROM AI_jobs, AI_model, wayline_job WHERE AI_jobs.AI_model_id = AI_model.id AND AI_jobs.wayline_job_id = wayline_job.job_id")
-        rows = cur.fetchall()
-        response = {"aiJobs": []}
-        for row in rows:
-            response["aiJobs"].append(row)
-    return jsonify(response), 200
-
-@sql_bp.route(prefix + '/getAIJob/<ai_job_id>', methods=["GET"])
-@ensure_connection
-def get_ai_job(conn,ai_job_id):
-    with conn.cursor() as cur:
-        cur.execute("SELECT AI_jobs.job_name, AI_model.model_name, wayline_job.name, AI_jobs.process, AI_jobs.status, AI_jobs.create_date, AI_jobs.finish_date FROM AI_jobs, AI_model, wayline_job WHERE AI_jobs.AI_model_id = AI_model.id AND AI_jobs.wayline_job_id = wayline_job.job_id AND AI_jobs.id = %s", [ai_job_id])
-        rows = cur.fetchall()
-        response = {"aiJob": rows[0]}
-    return jsonify(response), 200
-
-@sql_bp.route(prefix + '/deleteAIJob/<job_id>', methods=["DELETE"])
-@ensure_connection
-def delete_ai_job(conn,job_id):
-    with conn.cursor() as cur:
-        cur.execute("DELETE FROM AI_jobs WHERE id = %s", [job_id])
-    return "200"
-
-@sql_bp.route(prefix + '/getAIJobResults/<job_id>', methods=["GET"])
-@ensure_connection
-def get_ai_job_results(conn,job_id):
-    with conn.cursor() as cur:
-        cur.execute("SELECT img_oss_path, result FROM AI_job_result WHERE AI_job_id = %s", [job_id])
-        rows = cur.fetchall()
-        response = {}
-        for row in rows:
-            response[row[0]] = row[1]
-    return jsonify(response), 200
-
-@sql_bp.route(prefix + '/getAIModelIDNames', methods=["GET"])
-@ensure_connection
-def get_ai_models(conn):
-    with conn.cursor() as cur:
-        response = {"ids": [], "names": []}
-        cur.execute("SELECT id, model_name FROM AI_model")
-        rows = cur.fetchall()
-        for row in rows:
-            response["ids"].append(row[0])
-            response["names"].append(row[1])
-    return jsonify(response), 200
-
-@sql_bp.route(prefix + '/getModelName/<ai_model_id>', methods=["GET"])
-@ensure_connection
-def get_model_name(conn,ai_model_id):
-    with conn.cursor() as cur:
-        cur.execute("SELECT model_name FROM AI_model WHERE id = %s", [ai_model_id])
-        rows = cur.fetchall()
-        response = rows[0][0]
-    return jsonify({'modelName': response})
-
-@sql_bp.route(prefix + '/getWaylineJobIDNames', methods=["GET"])
-@ensure_connection
-def get_wayline_job_id_names(conn):
-    with conn.cursor() as cur:
-        response = {"ids": [], "names": []}
-        cur.execute("SELECT job_id, name FROM wayline_job")
-        rows = cur.fetchall()
-        for row in rows:
-            response["ids"].append(row[0])
-            response["names"].append(row[1])
-    return jsonify(response), 200
-
-@sql_bp.route(prefix + '/getWaylineJobMediaCount/<wayline_job_id>', methods=["GET"])
-@ensure_connection
-def get_wayline_job_media_count(conn,wayline_job_id):
-    with conn.cursor() as cur:
-        response = {"mediaCount": 0}
-        cur.execute("SELECT media_count FROM wayline_job WHERE job_id = %s", [wayline_job_id])
-        rows = cur.fetchall()
-        response["mediaCount"] = rows[0]
-    return jsonify(response), 200
-
-@sql_bp.route(prefix + '/getWaylineJobNameFileIdFlighTimeStatus/<wayline_job_id>', methods=["GET"])
-@ensure_connection
-def get_wayline_job_name_flighttime_fileid(conn,wayline_job_id):
-    with conn.cursor() as cur:
-        response = {"name": "", "fileId": "", "flightTime":"", "status": ""}
-        cur.execute("SELECT name, file_id, begin_time, end_time, status FROM wayline_job WHERE job_id = %s", [wayline_job_id])
-        rows = cur.fetchall()
-        response["name"] = rows[0][0]
-        response["fileId"] = rows[0][1]
-        response["flightTime"] = rows[0][3] - rows[0][2]
-        response["status"] = rows[0][4]
-    return jsonify(response), 200
-
-@sql_bp.route(prefix + '/getMissionName/<file_id>', methods=["GET"])
-@ensure_connection
-def get_mission_name(conn,file_id):
-    with conn.cursor() as cur:
-        response = {"missionName": ""}
-        cur.execute("SELECT name FROM wayline_file WHERE wayline_id = %s", [file_id])
-        rows = cur.fetchall()
-        response["missionName"] = rows[0][0]
-    return jsonify(response), 200
-
-
-def save_ai_result(connection,AI_job_id, img_oss_path, result):
-    cur = connection.cursor()
-    row = [AI_job_id, img_oss_path, result]
-    cur.execute("INSERT INTO AI_job_result (AI_job_id, img_oss_path, result) VALUES(%s, %s, %s)", row)
-    connection.commit()
-    cur.close()
-
-    return "200"
-
-@sql_bp.route(prefix + '/getDocks', methods=["GET"])
-@ensure_connection
-def get_all_docks(conn):
-    with conn.cursor() as cur:
-        cur.execute("SELECT * FROM manage_device")
-        rows = cur.fetchall()
-        records = []
-        for row in rows:
-            if row[6] == 1:
-                record_dict = {}
-                record_dict["nickname"] = row[4]
-                record_dict["sn"] = row[1]
-                records.append(record_dict)
-    return jsonify({'docks': records}), 200
-
-def add_odm_task(job_id, output_path, status):
-    with conn.cursor() as cur:
-        cur.execute("SELECT * FROM odm_tasks WHERE job_id = %s", [job_id])
-        existing_task = row
-        
-        if existing_task:
-            # If a record with the given job_id exists, update its status
-            cur.execute("UPDATE odm_tasks SET status = %s, output_path = %s WHERE job_id = %s", [status, output_path, job_id])
-        else:
-            # If no record with the given job_id exists, create a new record
-            cur.execute("INSERT INTO odm_tasks (job_id, output_path, status) VALUES (%s, %s, %s)", [job_id, output_path, status])
-    return "200"
-
-def get_odm_tasks():    
-    with conn.cursor() as cur:
-        cur.execute("SELECT * FROM odm_tasks")
-        rows = cur.fetchall()
-        records = []
-        for row in rows:
-            records.append(row)
+            cur.execute("SELECT * FROM user WHERE id = %s", [row["follower_id"]])
+            user = cur.fetchone()
+            response.append({"id": user["id"], "email": user["email"], "phoneNumber": user["phone_number"], "username": user["username"], "bio": user["bio"], "profilePicture": user["profile_picture"], "createTime": user["create_date"], "postCount": user["post_count"], "followerCount": user["follower_count"], "followingCount": user["following_count"]})
+        return jsonify(response), 200
     
-        return records
-
-
-@sql_bp.route(prefix + '/deleteODMTask/<job_id>', methods=["DELETE"])
+@user_bp.route(prefix + '/following/<user_id>', methods=["GET"])
 @ensure_connection
-def delete_odm_task(conn,job_id):
-    with conn.cursor() as cur:
-        sql_query = f"DELETE FROM odm_tasks WHERE job_id = {job_id};"
-        cur.execute(sql_query)
-    return "200"
-
-@sql_bp.route(prefix + '/addHistory', methods=["POST"])
-@ensure_connection
-def add_history(conn):
-    cur = conn.cursor()
-    data = request.json
-    cur.execute("INSERT INTO history (event_code, event_description, event_type) VALUES(%(event_code)s, %(event_description)s, %(event_type)s)", data)
-    conn.commit()
-    cur.close()
-
-    return "200"
-
-@sql_bp.route(prefix + '/getHistory', methods=["GET"])
-@ensure_connection
-def get_history(conn):
-    with conn.cursor() as cur:
-        cur.execute("SELECT * from history")
+def get_following(conn, user_id):
+    with conn.cursor(dictionary=True) as cur:
+        cur.execute("SELECT * FROM follow WHERE follower_id = %s", [user_id])
         rows = cur.fetchall()
-        records = []
+        response = []
         for row in rows:
-            records.append(row)
-        
-        return records
-"""
+            cur.execute("SELECT * FROM user WHERE id = %s", [row["following_id"]])
+            user = cur.fetchone()
+            response.append({"id": user["id"], "email": user["email"], "phoneNumber": user["phone_number"], "username": user["username"], "bio": user["bio"], "profilePicture": user["profile_picture"], "createTime": user["create_date"], "postCount": user["post_count"], "followerCount": user["follower_count"], "followingCount": user["following_count"]})
+        return jsonify(response), 200
+    
+@user_bp.route(prefix + '/likedPosts/<user_id>', methods=["GET"])
+@ensure_connection
+def get_liked_posts(conn, user_id):
+    with conn.cursor(dictionary=True) as cur:
+        cur.execute("SELECT * FROM liked WHERE user_id = %s", [user_id])
+        rows = cur.fetchall()
+        response = []
+        for row in rows:
+            cur.execute("SELECT * FROM post WHERE id = %s", [row["post_id"]])
+            post = cur.fetchone()
+            response.append({"postId": post["id"], "title": post["title"], "content": post["content"], "image": post["image"], "likeCount": post["like_count"], "commentCount": post["comment_count"], "createDate": post["create_date"]})
+        return jsonify(response), 200
+
+@user_bp.route(prefix + '/comments/<user_id>', methods=["GET"])
+@ensure_connection
+def get_comments(conn, user_id):
+    with conn.cursor(dictionary=True) as cur:
+        cur.execute("SELECT * FROM comment WHERE user_id = %s", [user_id])
+        comments = cur.fetchall()
+        comment_tree = []
+
+        # Create a dictionary to map comment IDs to their corresponding comments
+        comment_dict = {comment["id"]: comment for comment in comments}
+
+        for comment in comments:
+            if not comment["has_parent"]:
+                # If comment doesn't have a parent, it's a root comment
+                comment_tree.append(comment)
+            else:
+                # If comment has a parent, add it to its parent's 'replies' list
+                parent_id = comment["parent_id"]
+                parent_comment = comment_dict[parent_id]
+                if "replies" not in parent_comment:
+                    parent_comment["replies"] = []
+                parent_comment["replies"].append(comment)
+
+        return jsonify(comment_tree), 200
+    
