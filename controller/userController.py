@@ -77,7 +77,7 @@ def verify_email(conn, token):
 
     # # Return the image file
     # return send_file(BytesIO(response.content), mimetype='image/png')
-    return f"You have successfully verified your email! You can now log in. <a href='{frontend_endpoint}/login'>Click here to log in</a>"
+    return f"You have successfully verified your email! You can now log in."
 
 @user_bp.route(prefix + '/login', methods=["POST"])
 @ensure_connection
@@ -86,9 +86,16 @@ def login(conn):
         body = request.json
         cur.execute("SELECT * FROM user WHERE phone_number = %(phoneNumber)s", body)
         row = cur.fetchone()
-        if(row["verified"] and row["phone_number"] == body['phoneNumber'] and check_password(row["password"], body['password'])):
-            return jsonify({"id": row["id"]}), 200
-        return "401"
+        if(row):
+            if(row["phone_number"] == body['phoneNumber'] and check_password(row["password"], body['password'])):
+                if(row["verified"]):
+                    return jsonify({"id": row["id"]}), 200
+                else:
+                    return "User is not verified. Please verify your email.", 401
+            else:
+                return "Phone number or password is incorrect.", 401
+        else:
+            return "User does not exist.", 404
     
 @user_bp.route(prefix + '/register', methods=["POST"])
 @ensure_connection
